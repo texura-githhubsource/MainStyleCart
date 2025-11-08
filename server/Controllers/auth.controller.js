@@ -1,6 +1,9 @@
 import Admin from "../models/admin.schema.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const secretToken = process.env.SECRET_KEY;
 
