@@ -112,7 +112,7 @@ export const adminLogin = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000, 
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     return res.status(200).json({
@@ -149,6 +149,110 @@ export const adminLogout = async (req, res) => {
     console.error("Logout Error:", error);
     return res.status(500).json({
       message: "Something went wrong during logout!",
+      error: true,
+      success: false,
+    });
+  }
+};
+
+//ADMIN FORGET PASSWORD
+export const adminForgetPassword = async (req, res) => {
+  try {
+    const { oldPassword, newPassword, username } = req.body;
+
+    if (!oldPassword || !newPassword || !username) {
+      return res.status(400).json({
+        message: "Please provide username, old password, and new password.",
+        error: true,
+        success: false,
+      });
+    }
+
+    //Check if admin exists
+    const adminExists = await Admin.findOne({ username });
+    if (!adminExists) {
+      return res.status(404).json({
+        message: "Invalid username.",
+        error: true,
+        success: false,
+      });
+    }
+
+    //Compare old password
+    const isMatched = await bcrypt.compare(oldPassword, adminExists.password);
+    if (!isMatched) {
+      return res.status(400).json({
+        message: "Old password is incorrect.",
+        error: true,
+        success: false,
+      });
+    }
+
+    //Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    adminExists.password = hashedPassword;
+
+    //Save updated admin
+    await adminExists.save();
+
+    res.status(200).json({
+      message: "Password changed successfully!",
+      error: false,
+      success: true,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      message: "Something went wrong. Please try again later.",
+      error: true,
+      success: false,
+    });
+  }
+};
+
+// SEND MESSAGE TO ADMIN
+export const sendMessageToAdmin = async (req, res) => {
+  try {
+    const { name, email, message } = req.body;
+
+    // Validation
+    if (!name || !email || !message) {
+      return res.status(400).json({
+        message: "Please fill in all required fields (name, email, message).",
+        error: true,
+        success: false,
+      });
+    }
+
+    // Find admin
+    const admin = await Admin.findOne({ username: "admin" });
+    if (!admin) {
+      return res.status(404).json({
+        message: "Admin not found. Please contact support.",
+        error: true,
+        success: false,
+      });
+    }
+
+    // Push new message
+    admin.adminMessages.push({
+      name,
+      email,
+      message,
+    });
+
+    await admin.save();
+
+    return res.status(200).json({
+      message: "Message successfully sent to the admin!",
+      error: false,
+      success: true,
+    });
+
+  } catch (error) {
+    console.error("Error sending message to admin:", error);
+    return res.status(500).json({
+      message: "Internal server error. Please try again later.",
       error: true,
       success: false,
     });
