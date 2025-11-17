@@ -2,6 +2,7 @@ import Admin from "../models/admin.schema.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import Product from "../models/product.schema.js";
 
 dotenv.config();
 
@@ -70,61 +71,62 @@ export const adminRegister = async (req, res) => {
   }
 };
 
-// ADMIN LOGIN 
+//ADMIN LOGIN CONTROLLER
 export const adminLogin = async (req, res) => {
   try {
     const { username, password } = req.body;
 
+    //Check for empty fields
     if (!username || !password) {
       return res.status(400).json({
-        message: "Both username and password are required",
+        message: "Both username and password are required.",
         error: true,
         success: false,
       });
     }
 
-    // Check if admin exists
-    const adminExists = await Admin.findOne({ username });
-    if (!adminExists) {
+    //Find admin
+    const admin = await Admin.findOne({ username });
+    if (!admin) {
       return res.status(404).json({
-        message: "Invalid credentials, try again",
+        message: "Invalid credentials. Please try again.",
         error: true,
         success: false,
       });
     }
 
-    // Compare password
-    const isMatched = await bcrypt.compare(password, adminExists.password);
+    //Compare password
+    const isMatched = await bcrypt.compare(password, admin.password);
     if (!isMatched) {
-      return res.status(400).json({
-        message: "Invalid credentials, try again",
+      return res.status(401).json({
+        message: "Invalid credentials. Please try again.",
         error: true,
         success: false,
       });
     }
 
-    // Generate JWT
-    const payload = { id: adminExists._id, role: adminExists.role };
+    //Generate JWT Token
+    const payload = { id: admin._id, role: admin.role };
     const token = jwt.sign(payload, secretToken, { expiresIn: "7d" });
 
-    // Store token in cookie
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
+    //Send token in JSON 
     return res.status(200).json({
-      message: "Successfully logged in",
+      message: "Successfully logged in.",
       error: false,
       success: true,
-      data: { token },
+      data: {
+        token,
+        admin: {
+          id: admin._id,
+          username: admin.username,
+          role: admin.role,
+        },
+      },
     });
   } catch (error) {
     console.error("Login Error:", error);
     return res.status(500).json({
-      message: "Something went wrong, please try again later!",
+      message: "Something went wrong. Please try again later.",
       error: true,
       success: false,
     });
@@ -138,6 +140,7 @@ export const adminLogout = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
+      path: "/", 
     });
 
     return res.status(200).json({
@@ -148,12 +151,13 @@ export const adminLogout = async (req, res) => {
   } catch (error) {
     console.error("Logout Error:", error);
     return res.status(500).json({
-      message: "Something went wrong during logout!",
+      message: "Something went wrong during logout. Please try again later.",
       error: true,
       success: false,
     });
   }
 };
+
 
 //ADMIN FORGET PASSWORD
 export const adminForgetPassword = async (req, res) => {
@@ -258,3 +262,47 @@ export const sendMessageToAdmin = async (req, res) => {
     });
   }
 };
+
+// TO VIEW RECEIVED MESSAGES 
+export const getMessagesAdmin = async (req, res) => {
+  try {
+    //Extract admin ID from verified token (middleware)
+    const { id } = req.admin;
+
+    if (!id) {
+      return res.status(400).json({
+        message: "Invalid request. Admin ID not found.",
+        error: true,
+        success: false,
+      });
+    }
+
+    //Fetching message
+    const admin = await Admin.findById(id)
+      .select("adminMessages -_id");
+
+    if (!admin) {
+      return res.status(404).json({
+        message: "Admin not found.",
+        error: true,
+        success: false,
+      });
+    }
+
+    // Returning messages
+    return res.status(200).json({
+      message: "Messages fetched successfully.",
+      error: false,
+      success: true,
+      data: admin.adminMessages || [],
+    });
+  } catch (error) {
+    console.error("Error fetching admin messages:", error);
+    return res.status(500).json({
+      message: "Internal server error. Please try again later.",
+      error: true,
+      success: false,
+    });
+  }
+};
+
